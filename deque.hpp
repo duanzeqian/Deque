@@ -291,7 +291,11 @@ private:
     return l;
   }
 
-  typename double_list<Block*>::iterator locate(size_t idx, size_t& offset) // calculate the goal block and offset
+  /*
+   * locate the block idx-th iterator is in
+   * also return the offset (the index of iterator in the block)
+   */
+  typename double_list<Block*>::iterator locate(size_t idx, size_t& offset)
   {
     if (idx >= tot_size) throw("index_out_of_bound");
 
@@ -310,6 +314,9 @@ private:
     }
   }
 
+  /*
+   * split 'it' to two blocks
+   */
   void split_block(typename double_list<Block*>::iterator it)
   {
     Block* oldBlock = *it;
@@ -323,7 +330,60 @@ private:
     for (size_t i = 0; i < lsize; ++i) lblock->data[i] = oldBlock->data[i];
     for (size_t i = 0; i < rsize; ++i) rblock->data[i] = oldBlock->data[i + lsize];
 
-    double_list<Block*> tmp; // temporarily store items after oldBlock
+    double_list<Block*> tmp; // temporarily store blocks after 'oldBlock'
+    auto tmp_iter = it;
+    tmp_iter++;
+    while (tmp_iter != blocks.end())
+    {
+      tmp.insert_tail(*tmp_iter);
+      tmp_iter = blocks.erase(tmp_iter);
+    }
+    *it = lblock;
+    blocks.insert_tail(rblock); // remove 'old' and add two 'new's
+
+    tmp_iter = tmp.begin(); // insert 'tmp' back to 'blocks'
+    while (tmp_iter != tmp.end())
+    {
+      blocks.insert_tail(*tmp_iter);
+      tmp_iter++;
+    }
+
+    delete oldBlock;
+  }
+
+  /*
+   * merge 'lit' and 'rit' to one block
+   */
+  void merge_block(typename double_list<Block*>::iterator lit, typename double_list<Block*>::iterator rit)
+  {
+    Block* lblock = *lit;
+    Block* rblock = *rit;
+    size_t lsize = lblock->size;
+    size_t rsize = rblock->size;
+    size_t new_size = lsize + rsize;
+
+    Block* newBlock = new Block(new_size);
+    for (size_t i = 0; i < lsize; ++i) newBlock->data[i] = lblock->data[i];
+    for (size_t i = 0; i < rsize; ++i) newBlock->data[i + lsize] = rblock->data[i];
+
+    double_list<Block*> tmp;
+    auto tmp_iter = rit;
+    while (tmp_iter != blocks.end())
+    {
+      tmp.insert_tail(*tmp_iter);
+      tmp_iter = blocks.erase(tmp_iter);
+    }
+    *lit = newBlock;
+
+    tmp_iter = tmp.begin();
+    while (tmp_iter != tmp.end())
+    {
+      blocks.insert_tail(*tmp_iter);
+      tmp_iter++;
+    }
+
+    delete lblock;
+    delete rblock;
   }
 
 public:
