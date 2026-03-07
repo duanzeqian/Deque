@@ -668,65 +668,129 @@ public:
   /**
    * constructors.
    */
-  deque() {}
-  deque(const deque &other) {}
+  deque() : tot_size(0) {}
+  deque(const deque &other) : tot_size(other.tot_size) {
+    for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
+    {
+      Block* b = *it;
+      size_t siz = b->size();
+      Block* newBlock = new Block(siz);
+      for (size_t i = 0; i < siz; ++i) newBlock->data[i] = b->data[i];
+      blocks.insert_tail(newBlock);
+    }
+  }
 
   /**
    * deconstructor.
    */
-  ~deque() {}
+  ~deque() {
+    clear();
+  }
 
   /**
    * assignment operator.
    */
-  deque &operator=(const deque &other) {}
+  deque &operator=(const deque &other) {
+    if (this != &other)
+    {
+      clear();
+      for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
+      {
+        Block* b = *it;
+        size_t siz = b->size();
+        Block* newBlock = new Block(siz);
+        for (size_t i = 0; i < siz; ++i) newBlock->data[i] = b->data[i];
+        blocks.insert_tail(newBlock);
+      }
+      tot_size = other.tot_size;
+    }
+    return *this;
+  }
 
   /**
    * access a specified element with bound checking.
    * throw index_out_of_bound if out of bound.
    */
-  T &at(const size_t &pos) {}
-  const T &at(const size_t &pos) const {}
-  T &operator[](const size_t &pos) {}
-  const T &operator[](const size_t &pos) const {}
+  T &at(const size_t &pos) {
+    size_t off = 0;
+    auto it = locate(pos, off);
+    return (*it)->data[off];
+  }
+  const T &at(const size_t &pos) const {
+    size_t off = 0;
+    auto it = locate(pos, off);
+    return (*it)->data[off];
+  }
+  T &operator[](const size_t &pos) {
+    return at(pos);
+  }
+  const T &operator[](const size_t &pos) const {
+    return at(pos);
+  }
 
   /**
    * access the first element.
    * throw container_is_empty when the container is empty.
    */
-  const T &front() const {}
+  const T &front() const {
+    if (empty()) throw("container_is_empty");
+    return *cbegin();
+  }
   /**
    * access the last element.
    * throw container_is_empty when the container is empty.
    */
-  const T &back() const {}
+  const T &back() const {
+    if (empty()) throw("container_is_empty");
+    auto it = cend();
+    --it;
+    return *it;
+  }
 
   /**
    * return an iterator to the beginning.
    */
-  iterator begin() {}
-  const_iterator cbegin() const {}
+  iterator begin() {
+    if (empty()) return end();
+    return iterator(blocks.begin(), 0, this);
+  }
+  const_iterator cbegin() const {
+    if (empty()) return cend();
+    return const_iterator(blocks.begin(), 0, this);
+  }
 
   /**
    * return an iterator to the end.
    */
-  iterator end() {}
-  const_iterator cend() const {}
+  iterator end() {
+    return iterator(blocks.end(), 0, this);
+  }
+  const_iterator cend() const {
+    return const_iterator(blocks.begin(), 0, this);
+  }
 
   /**
    * check whether the container is empty.
    */
-  bool empty() const {}
+  bool empty() const { return tot_size == 0; }
 
   /**
    * return the number of elements.
    */
-  size_t size() const {}
+  size_t size() const { return tot_size; }
 
   /**
    * clear all contents.
    */
-  void clear() {}
+  void clear() {
+    auto it = blocks.begin();
+    while (it != blocks.end())
+    {
+      delete (*it);
+      it = blocks.erase(it);
+    }
+    tot_size = 0;
+  }
 
   /**
    * insert value before pos.
