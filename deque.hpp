@@ -273,7 +273,7 @@ private:
     {
       delete[] data;
     }
-  }
+  };
   double_list<Block*> blocks;
   size_t tot_size;
 
@@ -317,7 +317,7 @@ private:
   /*
    * split 'it' to two blocks
    */
-  void split_block(double_list<Block*>::iterator it)
+  void split_block(typename double_list<Block*>::iterator it)
   {
     Block* oldBlock = *it;
     size_t old_size = oldBlock->size;
@@ -354,7 +354,7 @@ private:
   /*
    * merge 'lit' and 'rit' to one block
    */
-  void merge_block(double_list<Block*>::iterator lit, double_list<Block*>::iterator rit)
+  void merge_block(typename double_list<Block*>::iterator lit, typename double_list<Block*>::iterator rit)
   {
     Block* lblock = *lit;
     Block* rblock = *rit;
@@ -396,7 +396,7 @@ public:
      */
     friend class const_iterator;
     friend class deque;
-    double_list<Block*>::iterator iter;
+    typename double_list<Block*>::iterator iter;
     deque* que; // the deque it belongs to
     size_t offset; // the offset inside the block
 
@@ -406,7 +406,7 @@ public:
      * if there are not enough elements, the behaviour is undefined.
      * same for operator-.
      */
-    iterator(double_list<Block*>::iterator it = double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0) :
+    iterator(typename double_list<Block*>::iterator it = typename double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0)
       : iter(it), que(q), offset(off) {}
     iterator(const iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
     ~iterator() = default;
@@ -416,13 +416,13 @@ public:
      */
     size_t cur_idx() const
     {
-      if (q == nullptr) throw("invalid_iterator");
+      if (que == nullptr) throw("invalid_iterator");
       size_t idx = offset;
-      auto it = blocks.begin();
+      auto it = que->blocks.begin();
       
       while (it != iter)
       {
-        idx += (*it)->size();
+        idx += (*it)->size;
         it++;
       }
 
@@ -432,7 +432,7 @@ public:
     iterator operator+(const int &n) const {
       size_t idx = cur_idx() + n;
       size_t off = 0;
-      auto newBlock = locate(idx, off);
+      auto newBlock = que->locate(idx, off);
       return iterator(newBlock, que, off);
     }
     iterator operator-(const int &n) const {
@@ -469,7 +469,7 @@ public:
      * ++iter
      */
     iterator &operator++() {
-      if (offset + 1 == (*iter).size())
+      if (offset + 1 == (*iter)->size)
       {
         iter++;
         offset = 0;
@@ -492,7 +492,7 @@ public:
       if (offset == 0)
       {
         iter--;
-        offset = (*iter).size() - 1;
+        offset = (*iter)->size - 1;
       }
       else offset--;
       return *this;
@@ -541,12 +541,12 @@ public:
     private:
     friend class iterator;
     friend class deque;
-    double_list<Block*>::iterator iter;
+    typename double_list<Block*>::iterator iter;
     deque* que;
     size_t offset;
 
   public:
-    const_iterator(double_list<Block*>::iterator it = double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0) :
+    const_iterator(typename double_list<Block*>::iterator it = typename double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0)
       : iter(it), que(q), offset(off) {}
     const_iterator(const iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
     const_iterator(const const_iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
@@ -554,13 +554,13 @@ public:
 
     size_t cur_idx() const
     {
-      if (q == nullptr) throw("invalid_iterator");
+      if (que == nullptr) throw("invalid_iterator");
       size_t idx = offset;
-      auto it = blocks.begin();
+      auto it = que->blocks.begin();
       
       while (it != iter)
       {
-        idx += (*it)->size();
+        idx += (*it)->size;
         it++;
       }
 
@@ -570,7 +570,7 @@ public:
     const_iterator operator+(const int &n) const {
       size_t idx = cur_idx() + n;
       size_t off = 0;
-      auto newBlock = locate(idx, off);
+      auto newBlock = que->locate(idx, off);
       return const_iterator(newBlock, que, off);
     }
     const_iterator operator-(const int &n) const {
@@ -602,7 +602,7 @@ public:
      * ++iter
      */
     const_iterator &operator++() {
-      if (offset + 1 == (*iter).size())
+      if (offset + 1 == (*iter)->size)
       {
         iter++;
         offset = 0;
@@ -625,7 +625,7 @@ public:
       if (offset == 0)
       {
         iter--;
-        offset = (*iter).size() - 1;
+        offset = (*iter)->size - 1;
       }
       else offset--;
       return *this;
@@ -673,7 +673,7 @@ public:
     for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
     {
       Block* b = *it;
-      size_t siz = b->size();
+      size_t siz = b->size;
       Block* newBlock = new Block(siz);
       for (size_t i = 0; i < siz; ++i) newBlock->data[i] = b->data[i];
       blocks.insert_tail(newBlock);
@@ -697,7 +697,7 @@ public:
       for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
       {
         Block* b = *it;
-        size_t siz = b->size();
+        size_t siz = b->size;
         Block* newBlock = new Block(siz);
         for (size_t i = 0; i < siz; ++i) newBlock->data[i] = b->data[i];
         blocks.insert_tail(newBlock);
@@ -752,21 +752,21 @@ public:
    */
   iterator begin() {
     if (empty()) return end();
-    return iterator(blocks.begin(), 0, this);
+    return iterator(blocks.begin(), this, 0);
   }
   const_iterator cbegin() const {
     if (empty()) return cend();
-    return const_iterator(blocks.begin(), 0, this);
+    return const_iterator(blocks.begin(), this, 0);
   }
 
   /**
    * return an iterator to the end.
    */
   iterator end() {
-    return iterator(blocks.end(), 0, this);
+    return iterator(blocks.end(), this, 0);
   }
   const_iterator cend() const {
-    return const_iterator(blocks.begin(), 0, this);
+    return const_iterator(blocks.begin(), this, 0);
   }
 
   /**
@@ -824,7 +824,7 @@ public:
     curBlock->size++;
     tot_size++;
 
-    return iterator(iter, off, this);
+    return iterator(iter, this, off);
   }
 
   /**
@@ -865,11 +865,11 @@ public:
       }
 
       // check if the deleted element is the last one
-      if (off < curBlock->size) return iterator(iter, off, this);
+      if (off < curBlock->size) return iterator(iter, this, off);
       else
       {
         iter++;
-        return iterator(iter, 0, this);
+        return iterator(iter, this, 0);
       }
     }
   }
@@ -878,7 +878,7 @@ public:
    * add an element to the end.
    */
   void push_back(const T &value) {
-    size_t goal = ideal_idx();
+    size_t goal = ideal_size();
     auto last = blocks.end();
     if (blocks.siz() > 0) last--;
 
@@ -931,7 +931,7 @@ public:
    * insert an element to the beginning.
    */
   void push_front(const T &value) {
-    size_t goal = ideal_idx();
+    size_t goal = ideal_size();
     auto first = blocks.begin();
 
     if (blocks.siz() == 0 || (*first)->size >= (goal << 1)) // cases to add new blocks
