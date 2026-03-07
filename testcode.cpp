@@ -444,6 +444,11 @@ bool nomercyTest() {
 }
 
 int main() {
+    try {
+        eraseTest();
+    } catch (const char* msg) {
+        std::cerr << "Caught in main: " << msg << std::endl;
+    }
     bool (*testFunc[])()= {
         pushTest, popTest, insertTest, iteratorTest,
         eraseTest, copyAndClearTest, memoryTest,

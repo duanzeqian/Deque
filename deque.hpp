@@ -403,7 +403,8 @@ private:
    */
   typename double_list<Block*>::iterator locate(size_t idx, size_t& offset)
   {
-    if (idx >= tot_size) throw("index_out_of_bound");
+    if (idx == tot_size) return blocks.end();
+    if (idx > tot_size) throw("index_out_of_bound");
 
     auto it = blocks.begin();
     size_t tot = 0;
@@ -418,6 +419,28 @@ private:
       tot += b->size;
       it++;
     }
+    throw("index_out_of_bound");
+  }
+
+  typename double_list<Block*>::const_iterator locate(size_t idx, size_t& offset) const
+  {
+    if (idx == tot_size) return blocks.cend();
+    if (idx > tot_size) throw("index_out_of_bound");
+
+    auto it = blocks.cbegin();
+    size_t tot = 0;
+    while (it != blocks.cend())
+    {
+      Block* b = *it;
+      if (idx < tot + b->size) // idx \in [0, b->size())
+      {
+        offset = idx - tot;
+        return it;
+      }
+      tot += b->size;
+      it++;
+    }
+    throw("index_out_of_bound");
   }
 
   /*
@@ -662,7 +685,7 @@ public:
     {
       if (que == nullptr) throw("invalid_iterator");
       size_t idx = offset;
-      auto it = que->blocks.begin();
+      auto it = que->blocks.cbegin();
       
       while (it != iter)
       {
@@ -818,11 +841,15 @@ public:
    * throw index_out_of_bound if out of bound.
    */
   T &at(const size_t &pos) {
+    if (pos < 0 || pos >= tot_size) throw("index_out_of_bound");
+
     size_t off = 0;
     auto it = locate(pos, off);
     return (*it)->data[off];
   }
   const T &at(const size_t &pos) const {
+    if (pos < 0 || pos >= tot_size) throw("index_out_of_bound");
+
     size_t off = 0;
     auto it = locate(pos, off);
     return (*it)->data[off];
@@ -905,8 +932,15 @@ public:
    */
   iterator insert(iterator pos, const T &value) {
     if (pos.que != this) throw("invalid_iterator");
+    if (pos == end())
+    { 
+      push_back(value);
+      auto it = end();
+      --it;
+      return it;
+    }
     size_t pos_idx = pos.cur_idx();
-    if (pos_idx < 0 || pos_idx >= tot_size) throw("index_out_of_bound");
+    if (pos_idx < 0 || pos_idx > tot_size) throw("index_out_of_bound");
 
     size_t off = pos.offset;
     auto iter = pos.iter;
@@ -931,7 +965,6 @@ public:
     *iter = newBlock;
 
     tot_size++;
-
     return iterator(iter, this, off);
   }
 
@@ -974,12 +1007,15 @@ public:
     {
       auto prev = iter;
       auto next = iter;
+      next++;
       if (prev != blocks.begin())
       {
         prev--;
         merge_block(prev, iter);
+        iter = prev;
+        iter++;
       }
-      else if (++next != blocks.end())
+      else if (next != blocks.end())
       {
         merge_block(iter, next);
       }
