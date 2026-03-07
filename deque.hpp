@@ -60,6 +60,7 @@ public:
 		return *this;
 	}
 
+  class const_iterator;
 	class iterator {
 	private:
 		friend class double_list;
@@ -154,6 +155,94 @@ public:
 			return !(*this == rhs);
 		}
 	};
+
+  class const_iterator {
+	private:
+		friend class double_list;
+		const Node* iter;
+		const double_list* list;
+	public:
+		const_iterator(const Node* it = nullptr, const double_list* l = nullptr) : iter(it), list(l) {}
+		const_iterator(const const_iterator &t) : iter(t.iter), list(t.list) {}
+    const_iterator(const iterator& t) : iter(t.iter), list(t.list) {}
+		~const_iterator() = default;
+		
+		/**
+		 * iter++
+		 */
+		const_iterator operator++(int) {
+			if (iter == nullptr) throw("invalid");
+			const_iterator tmp = *this;
+			iter = iter->next;
+			return tmp;
+		}
+		/**
+		 * ++iter
+		 */
+		const_iterator &operator++() {
+			if (iter == nullptr) throw("invalid");
+			iter = iter->next;
+			return *this;
+		}
+		/**
+		 * iter--
+		 */
+		const_iterator operator--(int) {
+			if (iter == nullptr)
+			{
+				if (list == nullptr || list->tail == nullptr) throw("invalid");
+				const_iterator tmp = *this;
+				iter = list->tail;
+				return tmp;
+			}
+			else
+			{
+				if (iter->prev == nullptr) throw("invalid");
+				const_iterator tmp = *this;
+				iter = iter->prev;
+				return tmp;
+			}
+		}
+		/**
+		 * --iter
+		 */
+		const_iterator &operator--() {
+			if (iter == nullptr)
+			{
+				if (list == nullptr || list->tail == nullptr) throw("invalid");
+				iter = list->tail;
+			}
+			else
+			{
+				if (iter->prev == nullptr) throw("invalid");
+				iter = iter->prev;
+			}
+			return *this;
+		}
+		
+		/**
+		 * if the iter didn't point to a value
+		 * throw " invalid"
+		 */
+		const T &operator*() const {
+			if (iter == nullptr) throw("invalid");
+			return iter->data;
+		}
+		
+		/**
+		 * other operation
+		 */
+		const T *operator->() const noexcept {
+			return &(iter->data);
+		}
+		bool operator==(const const_iterator &rhs) const {
+			return iter == rhs.iter && list == rhs.list;
+		}
+		bool operator!=(const const_iterator &rhs) const {
+			return !(*this == rhs);
+		}
+	};
+
 	/**
 	 * return an iterator to the beginning
 	 */
@@ -167,6 +256,13 @@ public:
 	 */
 	iterator end() {
 		return iterator(nullptr, this);
+	}
+
+  const_iterator cbegin() const {
+		return const_iterator(head, this);
+	}
+	const_iterator cend() const {
+		return const_iterator(nullptr, this);
 	}
 	/**
 	 * if the iter didn't point to anything, do nothing,
@@ -551,12 +647,12 @@ public:
     private:
     friend class iterator;
     friend class deque;
-    typename double_list<Block*>::iterator iter;
-    deque* que;
+    typename double_list<Block*>::const_iterator iter;
+    const deque* que;
     size_t offset;
 
   public:
-    const_iterator(typename double_list<Block*>::iterator it = typename double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0)
+    const_iterator(typename double_list<Block*>::const_iterator it = typename double_list<Block*>::const_iterator(), const deque* q = nullptr,  size_t off = 0)
       : iter(it), que(q), offset(off) {}
     const_iterator(const iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
     const_iterator(const const_iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
@@ -644,13 +740,13 @@ public:
     /**
      * *it
      */
-    T &operator*() const {
+    const T &operator*() const {
       return (*iter)->data[offset]; // if invalid, (*iter) will throw in double_list
     }
     /**
      * it->field
      */
-    T *operator->() const noexcept {
+    const T *operator->() const noexcept {
       return &(*iter)->data[offset];
     }
 
@@ -679,8 +775,8 @@ public:
    * constructors.
    */
   deque() : tot_size(0) {}
-  deque(deque &other) : tot_size(other.tot_size) {
-    for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
+  deque(const deque &other) : tot_size(other.tot_size) {
+    for (auto it = other.blocks.cbegin(); it != other.blocks.cend(); ++it)
     {
       Block* b = *it;
       size_t siz = b->size;
@@ -700,11 +796,11 @@ public:
   /**
    * assignment operator.
    */
-  deque &operator=(deque &other) {
+  deque &operator=(const deque &other) {
     if (this != &other)
     {
       clear();
-      for (auto it = other.blocks.begin(); it != other.blocks.end(); ++it)
+      for (auto it = other.blocks.cbegin(); it != other.blocks.cend(); ++it)
       {
         Block* b = *it;
         size_t siz = b->size;
@@ -766,7 +862,7 @@ public:
   }
   const_iterator cbegin() const {
     if (empty()) return cend();
-    return const_iterator(blocks.begin(), this, 0);
+    return const_iterator(blocks.cbegin(), this, 0);
   }
 
   /**
@@ -776,7 +872,7 @@ public:
     return iterator(blocks.end(), this, 0);
   }
   const_iterator cend() const {
-    return const_iterator(blocks.begin(), this, 0);
+    return const_iterator(blocks.cend(), this, 0);
   }
 
   /**
@@ -809,6 +905,8 @@ public:
    */
   iterator insert(iterator pos, const T &value) {
     if (pos.que != this) throw("invalid_iterator");
+    size_t pos_idx = pos.cur_idx();
+    if (pos_idx < 0 || pos_idx >= tot_size) throw("index_out_of_bound");
 
     size_t off = pos.offset;
     auto iter = pos.iter;
@@ -832,6 +930,8 @@ public:
     delete curBlock;
     *iter = newBlock;
 
+    tot_size++;
+
     return iterator(iter, this, off);
   }
 
@@ -842,12 +942,24 @@ public:
    * the iterator is invalid, or it points to a wrong place.
    */
   iterator erase(iterator pos) {
-    if (pos.que != this || pos == end()) throw("invalid_iterator");
+    if (pos.que != this) throw("invalid_iterator");
     if (empty()) throw("container_is_empty");
+    size_t pos_idx = pos.cur_idx();
+    if (pos_idx < 0 || pos_idx >= tot_size) throw("index_out_of_bound");
 
     size_t off = pos.offset;
     auto iter = pos.iter;
     Block* curBlock = *iter;
+
+    if (curBlock->size == 1) // if size = 1, delete the whole block
+    {
+      auto next_it = iter;
+      ++next_it;
+      delete curBlock;
+      blocks.erase(iter);
+      tot_size--;
+      return iterator(next_it, this, 0);
+    }
 
     Block* newBlock = new Block(curBlock->size - 1);
     for (size_t i = 0; i < off; ++i) newBlock->construct_at(i, curBlock->data[i]);
