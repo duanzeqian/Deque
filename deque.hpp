@@ -304,7 +304,7 @@ private:
     while (it != blocks.end())
     {
       Block* b = *it;
-      if (idx <= tot + b->size)
+      if (idx < tot + b->size) // idx \in [0, b->size())
       {
         offset = idx - tot;
         return it;
@@ -317,7 +317,7 @@ private:
   /*
    * split 'it' to two blocks
    */
-  void split_block(typename double_list<Block*>::iterator it)
+  void split_block(double_list<Block*>::iterator it)
   {
     Block* oldBlock = *it;
     size_t old_size = oldBlock->size;
@@ -354,7 +354,7 @@ private:
   /*
    * merge 'lit' and 'rit' to one block
    */
-  void merge_block(typename double_list<Block*>::iterator lit, typename double_list<Block*>::iterator rit)
+  void merge_block(double_list<Block*>::iterator lit, double_list<Block*>::iterator rit)
   {
     Block* lblock = *lit;
     Block* rblock = *rit;
@@ -394,7 +394,11 @@ public:
      * add data members.
      * just add whatever you want.
      */
-    deque* que;
+    friend class const_iterator;
+    friend class deque;
+    double_list<Block*>::iterator iter;
+    deque* que; // the deque it belongs to
+    size_t offset; // the offset inside the block
 
   public:
     /**
@@ -402,55 +406,130 @@ public:
      * if there are not enough elements, the behaviour is undefined.
      * same for operator-.
      */
-    iterator operator+(const int &n) const {}
-    iterator operator-(const int &n) const {}
+    iterator(double_list<Block*>::iterator it = double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0) :
+      : iter(it), que(q), offset(off) {}
+    iterator(const iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
+    ~iterator() = default;
+
+    /*
+     * a function used to calculate the global index of an iterator (element)
+     */
+    size_t cur_idx() const
+    {
+      if (q == nullptr) throw("invalid_iterator");
+      size_t idx = offset;
+      auto it = blocks.begin();
+      
+      while (it != iter)
+      {
+        idx += (*it)->size();
+        it++;
+      }
+
+      return idx;
+    }
+
+    iterator operator+(const int &n) const {
+      size_t idx = cur_idx() + n;
+      size_t off = 0;
+      auto newBlock = locate(idx, off);
+      return iterator(newBlock, que, off);
+    }
+    iterator operator-(const int &n) const {
+      return *this + (-n);
+    }
 
     /**
      * return the distance between two iterators.
      * if they point to different vectors, throw
      * invaild_iterator.
      */
-    int operator-(const iterator &rhs) const {}
-    iterator &operator+=(const int &n) {}
-    iterator &operator-=(const int &n) {}
+    int operator-(const iterator &rhs) const {
+      if (que != rhs.que) throw("invalid_iterator");
+      return static_cast<int>(cur_idx() - rhs.cur_idx());
+    }
+    iterator &operator+=(const int &n) {
+      *this = *this + n;
+      return *this;
+    }
+    iterator &operator-=(const int &n) {
+      *this = *this - n;
+      return *this;
+    }
 
     /**
      * iter++
      */
-    iterator operator++(int) {}
+    iterator operator++(int) {
+      iterator tmp = *this;
+      ++(*this);
+      return tmp;
+    }
     /**
      * ++iter
      */
-    iterator &operator++() {}
+    iterator &operator++() {
+      if (offset + 1 == (*iter).size())
+      {
+        iter++;
+        offset = 0;
+      }
+      else offset++;
+      return *this;
+    }
     /**
      * iter--
      */
-    iterator operator--(int) {}
+    iterator operator--(int) {
+      iterator tmp = *this;
+      --(*this);
+      return tmp;
+    }
     /**
      * --iter
      */
-    iterator &operator--() {}
+    iterator &operator--() {
+      if (offset == 0)
+      {
+        iter--;
+        offset = (*iter).size() - 1;
+      }
+      else offset--;
+      return *this;
+    }
 
     /**
      * *it
      */
-    T &operator*() const {}
+    T &operator*() const {
+      return (*iter)->data[offset]; // if invalid, (*iter) will throw in double_list
+    }
     /**
      * it->field
      */
-    T *operator->() const noexcept {}
+    T *operator->() const noexcept {
+      return &(*iter)->data[offset];
+    }
 
     /**
      * check whether two iterators are the same (pointing to the same
      * memory).
      */
-    bool operator==(const iterator &rhs) const {}
-    bool operator==(const const_iterator &rhs) const {}
+    bool operator==(const iterator &rhs) const {
+      return iter == rhs.iter && que == rhs.que && offset == rhs.offset;
+    }
+    bool operator==(const const_iterator &rhs) const {
+      return iter == rhs.iter && que == rhs.que && offset == rhs.offset;
+    }
     /**
      * some other operator for iterators.
      */
-    bool operator!=(const iterator &rhs) const {}
-    bool operator!=(const const_iterator &rhs) const {}
+    bool operator!=(const iterator &rhs) const {
+      return !(*this == rhs);
+    }
+    bool operator!=(const const_iterator &rhs) const {
+      return !(*this == rhs);
+    }
   };
 
   class const_iterator {
@@ -459,6 +538,131 @@ public:
      * you can copy them, but with care!
      * and it should be able to be constructed from an iterator.
      */
+    private:
+    friend class iterator;
+    friend class deque;
+    double_list<Block*>::iterator iter;
+    deque* que;
+    size_t offset;
+
+  public:
+    const_iterator(double_list<Block*>::iterator it = double_list<Block*>::iterator(), deque* q = nullptr,  size_t off = 0) :
+      : iter(it), que(q), offset(off) {}
+    const_iterator(const iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
+    const_iterator(const const_iterator& other) : iter(other.iter), que(other.que), offset(other.offset) {}
+    ~const_iterator() = default;
+
+    size_t cur_idx() const
+    {
+      if (q == nullptr) throw("invalid_iterator");
+      size_t idx = offset;
+      auto it = blocks.begin();
+      
+      while (it != iter)
+      {
+        idx += (*it)->size();
+        it++;
+      }
+
+      return idx;
+    }
+
+    const_iterator operator+(const int &n) const {
+      size_t idx = cur_idx() + n;
+      size_t off = 0;
+      auto newBlock = locate(idx, off);
+      return const_iterator(newBlock, que, off);
+    }
+    const_iterator operator-(const int &n) const {
+      return *this + (-n);
+    }
+
+    int operator-(const const_iterator &rhs) const {
+      if (que != rhs.que) throw("invalid_iterator");
+      return static_cast<int>(cur_idx() - rhs.cur_idx());
+    }
+    const_iterator &operator+=(const int &n) {
+      *this = *this + n;
+      return *this;
+    }
+    const_iterator &operator-=(const int &n) {
+      *this = *this - n;
+      return *this;
+    }
+
+    /**
+     * iter++
+     */
+    const_iterator operator++(int) {
+      const_iterator tmp = *this;
+      ++(*this);
+      return tmp;
+    }
+    /**
+     * ++iter
+     */
+    const_iterator &operator++() {
+      if (offset + 1 == (*iter).size())
+      {
+        iter++;
+        offset = 0;
+      }
+      else offset++;
+      return *this;
+    }
+    /**
+     * iter--
+     */
+    const_iterator operator--(int) {
+      const_iterator tmp = *this;
+      --(*this);
+      return tmp;
+    }
+    /**
+     * --iter
+     */
+    const_iterator &operator--() {
+      if (offset == 0)
+      {
+        iter--;
+        offset = (*iter).size() - 1;
+      }
+      else offset--;
+      return *this;
+    }
+
+    /**
+     * *it
+     */
+    T &operator*() const {
+      return (*iter)->data[offset]; // if invalid, (*iter) will throw in double_list
+    }
+    /**
+     * it->field
+     */
+    T *operator->() const noexcept {
+      return &(*iter)->data[offset];
+    }
+
+    /**
+     * check whether two iterators are the same (pointing to the same
+     * memory).
+     */
+    bool operator==(const const_iterator &rhs) const {
+      return iter == rhs.iter && que == rhs.que && offset == rhs.offset;
+    }
+    bool operator==(const iterator &rhs) const {
+      return iter == rhs.iter && que == rhs.que && offset == rhs.offset;
+    }
+    /**
+     * some other operator for iterators.
+     */
+    bool operator!=(const const_iterator &rhs) const {
+      return !(*this == rhs);
+    }
+    bool operator!=(const iterator &rhs) const {
+      return !(*this == rhs);
+    }
   };
 
   /**
