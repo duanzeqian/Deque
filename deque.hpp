@@ -797,7 +797,35 @@ public:
    * return an iterator pointing to the inserted value.
    * throw if the iterator is invalid or it points to a wrong place.
    */
-  iterator insert(iterator pos, const T &value) {}
+  iterator insert(iterator pos, const T &value) {
+    if (pos.que != this) throw("invalid_iterator");
+
+    size_t off = pos.offset;
+    auto iter = pos.iter;
+    Block* curBlock = *iter;
+    size_t goal = ideal_size();
+
+    if (curBlock->size + 1 > (goal << 1)) // should be split
+    {
+      split_block(iter);
+      size_t idx = pos.cur_idx(); // calculate the numbers again
+      off = 0;
+      iter = locate(idx, off);
+      curBlock = *iter;
+    }
+
+    // delete oldData and calculate newData
+    T* newData = new T[curBlock->size + 1];
+    for (size_t i = 0; i < off; ++i) newData[i] = curBlock->data[i];
+    newData[off] = value;
+    for (size_t i = off; i < curBlock->size; ++i) newData[i + 1] = curBlock->data[i];
+    delete[] curBlock->data;
+    curBlock->data = newData;
+    curBlock->size++;
+    tot_size++;
+
+    return iterator(iter, off, this);
+  }
 
   /**
    * remove the element at pos.
@@ -805,29 +833,150 @@ public:
    * the last element, return end(). throw if the container is empty,
    * the iterator is invalid, or it points to a wrong place.
    */
-  iterator erase(iterator pos) {}
+  iterator erase(iterator pos) {
+    if (pos.que != this || pos == end()) throw("invalid_iterator");
+    if (empty()) throw("container_is_empty");
+
+    size_t off = pos.offset;
+    auto iter = pos.iter;
+    Block* curBlock = *iter;
+
+    T* newData = (curBlock->size > 1) ? new T[curBlock->size - 1] : nullptr;
+    for (size_t i = 0; i < off; ++i) newData[i] = curBlock->data[i];
+    for (size_t i = off + 1; i < curBlock->size; ++i) newData[i - 1] = curBlock->data[i];
+    delete[] curBlock->data;
+    curBlock->data = newData;
+    curBlock->size--;
+    tot_size--;
+
+    size_t goal = ideal_size();
+    if (curBlock->size < (goal >> 1) && blocks.siz() > 1) // should be merged
+    {
+      auto prev = iter;
+      auto next = iter;
+      if (prev != blocks.begin())
+      {
+        prev--;
+        merge_block(prev, iter);
+      }
+      else if (++next != blocks.end())
+      {
+        merge_block(iter, next);
+      }
+
+      // check if the deleted element is the last one
+      if (off < curBlock->size) return iterator(iter, off, this);
+      else
+      {
+        iter++;
+        return iterator(iter, 0, this);
+      }
+    }
+  }
 
   /**
    * add an element to the end.
    */
-  void push_back(const T &value) {}
+  void push_back(const T &value) {
+    size_t goal = ideal_idx();
+    auto last = blocks.end();
+    if (blocks.siz() > 0) last--;
+
+    if (blocks.siz() == 0 || (*last)->size >= (goal << 1)) // cases to add new blocks
+    {
+      Block* newBlock = new Block(1);
+      newBlock->data[0] = value;
+      blocks.insert_tail(newBlock);
+    }
+    else
+    {
+      Block* blk = *last;
+      T* newData = new T[blk->size + 1];
+      for (size_t i = 0; i < blk->size; ++i) newData[i] = blk->data[i];
+      newData[blk->size] = value;
+      delete[] blk->data;
+      blk->data = newData;
+      blk->size++;
+    }
+    tot_size++;
+  }
 
   /**
    * remove the last element.
    * throw when the container is empty.
    */
-  void pop_back() {}
+  void pop_back() {
+    if (empty()) throw("container_is_empty");
+
+    auto last = blocks.end();
+    last--;
+    Block* blk = *last;
+    if (blk->size == 1) // only one element, delete the block
+    {
+      delete blk;
+      blocks.delete_tail();
+    }
+    else
+    {
+      T* newData = new T[blk->size - 1];
+      for (size_t i = 0; i < blk->size - 1; ++i) newData[i] = blk->data[i];
+      delete[] blk->data;
+      blk->data = newData;
+      blk->size--;
+    }
+    tot_size--;
+  }
 
   /**
    * insert an element to the beginning.
    */
-  void push_front(const T &value) {}
+  void push_front(const T &value) {
+    size_t goal = ideal_idx();
+    auto first = blocks.begin();
+
+    if (blocks.siz() == 0 || (*first)->size >= (goal << 1)) // cases to add new blocks
+    {
+      Block* newBlock = new Block(1);
+      newBlock->data[0] = value;
+      blocks.insert_head(newBlock);
+    }
+    else
+    {
+      Block* blk = *first;
+      T* newData = new T[blk->size + 1];
+      newData[0] = value;
+      for (size_t i = 0; i < blk->size; ++i) newData[i + 1] = blk->data[i];
+      delete[] blk->data;
+      blk->data = newData;
+      blk->size++;
+    }
+    tot_size++;
+  }
 
   /**
    * remove the first element.
    * throw when the container is empty.
    */
-  void pop_front() {}
+  void pop_front() {
+    if (empty()) throw("container_is_empty");
+
+    auto first = blocks.begin();
+    Block* blk = *first;
+    if (blk->size == 1) // only one element, delete the block
+    {
+      delete blk;
+      blocks.delete_head();
+    }
+    else
+    {
+      T* newData = new T[blk->size - 1];
+      for (size_t i = 1; i < blk->size; ++i) newData[i - 1] = blk->data[i];
+      delete[] blk->data;
+      blk->data = newData;
+      blk->size--;
+    }
+    tot_size--;
+  }
 };
 
 } // namespace sjtu
