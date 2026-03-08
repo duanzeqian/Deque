@@ -386,7 +386,7 @@ private:
   size_t ideal_size()
   {
     size_t l = 1, r = tot_size;
-    if (!r) return 16; // size of the first block
+    if (!r) return 2048; // size of the first block
 
     while (l < r)
     {
@@ -497,6 +497,7 @@ private:
 
     double_list<Block*> tmp;
     auto tmp_iter = rit;
+    tmp_iter = blocks.erase(tmp_iter);
     while (tmp_iter != blocks.end())
     {
       tmp.insert_tail(*tmp_iter);
@@ -947,12 +948,12 @@ public:
     Block* curBlock = *iter;
     size_t goal = ideal_size();
 
-    if (curBlock->size + 1 > (goal << 1)) // should be split
+    if (curBlock->size + 1 > (goal * 1.03)) // should be split
     {
       split_block(iter);
-      size_t idx = pos.cur_idx(); // calculate the numbers again
+      // calculate the numbers again
       off = 0;
-      iter = locate(idx, off);
+      iter = locate(pos_idx, off);
       curBlock = *iter;
     }
 
@@ -1003,7 +1004,7 @@ public:
     curBlock = *iter;
 
     size_t goal = ideal_size();
-    if (curBlock->size < (goal >> 1) && blocks.siz() > 1) // should be merged
+    if (curBlock->size < (goal / 1.03) && blocks.siz() > 1) // should be merged
     {
       auto prev = iter;
       auto next = iter;
@@ -1012,12 +1013,16 @@ public:
       {
         prev--;
         merge_block(prev, iter);
-        iter = prev;
-        iter++;
+        off = 0;
+        iter = locate(pos_idx, off);
+        return iterator(iter, this, off);
       }
       else if (next != blocks.end())
       {
         merge_block(iter, next);
+        off = 0;
+        iter = locate(pos_idx, off);
+        return iterator(iter, this, off);
       }
     }
 
@@ -1038,7 +1043,7 @@ public:
     auto last = blocks.end();
     if (blocks.siz() > 0) last--;
 
-    if (blocks.siz() == 0 || (*last)->size >= (goal << 1)) // cases to add new blocks
+    if (blocks.siz() == 0 || (*last)->size >= (goal * 1.03)) // cases to add new blocks
     {
       Block* newBlock = new Block(1);
       newBlock->construct_at(0, value);
@@ -1088,7 +1093,7 @@ public:
     size_t goal = ideal_size();
     auto first = blocks.begin();
 
-    if (blocks.siz() == 0 || (*first)->size >= (goal << 1)) // cases to add new blocks
+    if (blocks.siz() == 0 || (*first)->size >= (goal * 1.03)) // cases to add new blocks
     {
       Block* newBlock = new Block(1);
       newBlock->construct_at(0, value);
