@@ -359,10 +359,11 @@ private:
   {
     T* data;
     size_t size;
+    size_t capacity;
 
-    Block(size_t n = 0) : size(n)
+    Block(size_t n = 0) : size(n), capacity(n * 2)
     {
-      if (n > 0) data = static_cast<T*>(::operator new(sizeof(T) * n));
+      if (n > 0) data = static_cast<T*>(::operator new(sizeof(T) * n * 2));
       else data = nullptr;
     }
     ~Block()
@@ -378,6 +379,11 @@ private:
     void construct_at(size_t pos, const T& val) // construct T() (not default)
     {
       new (&data[pos]) T(val);
+    }
+
+    void destroy_at(size_t pos) // deconstruct T() by hand
+    {
+      data[pos].~T();
     }
   };
   double_list<Block*> blocks;
@@ -448,16 +454,19 @@ private:
    */
   void split_block(typename double_list<Block*>::iterator it)
   {
-    Block* oldBlock = *it;
-    size_t old_size = oldBlock->size;
+    Block* lblock = *it;
+    size_t old_size = lblock->size;
     size_t lsize = old_size >> 1;
     if (lsize == 0) return; // can't split
     size_t rsize = old_size - lsize;
+    lblock->size = lsize;
 
-    Block* lblock = new Block(lsize);
     Block* rblock = new Block(rsize);
-    for (size_t i = 0; i < lsize; ++i) lblock->construct_at(i, oldBlock->data[i]);
-    for (size_t i = 0; i < rsize; ++i) rblock->construct_at(i, oldBlock->data[i + lsize]);
+    for (size_t i = 0; i < rsize; ++i)
+    {
+      rblock->construct_at(i, lblock->data[i + lsize]);
+      lblock->destroy_at(i + lsize);
+    }
 
     double_list<Block*> tmp; // temporarily store blocks after 'oldBlock'
     auto tmp_iter = it;
@@ -476,8 +485,6 @@ private:
       blocks.insert_tail(*tmp_iter);
       tmp_iter++;
     }
-
-    delete oldBlock;
   }
 
   /*
@@ -491,29 +498,56 @@ private:
     size_t rsize = rblock->size;
     size_t new_size = lsize + rsize;
 
-    Block* newBlock = new Block(new_size);
-    for (size_t i = 0; i < lsize; ++i) newBlock->construct_at(i, lblock->data[i]);
-    for (size_t i = 0; i < rsize; ++i) newBlock->construct_at(i + lsize, rblock->data[i]);
-
-    double_list<Block*> tmp;
-    auto tmp_iter = rit;
-    tmp_iter = blocks.erase(tmp_iter);
-    while (tmp_iter != blocks.end())
+    if (new_size > lblock->capacity)
     {
-      tmp.insert_tail(*tmp_iter);
+      Block* newBlock = new Block(new_size);
+      for (size_t i = 0; i < lsize; ++i) newBlock->construct_at(i, lblock->data[i]);
+      for (size_t i = 0; i < rsize; ++i) newBlock->construct_at(i + lsize, rblock->data[i]);
+
+      double_list<Block*> tmp;
+      auto tmp_iter = rit;
       tmp_iter = blocks.erase(tmp_iter);
-    }
-    *lit = newBlock;
+      while (tmp_iter != blocks.end())
+      {
+        tmp.insert_tail(*tmp_iter);
+        tmp_iter = blocks.erase(tmp_iter);
+      }
+      *lit = newBlock;
 
-    tmp_iter = tmp.begin();
-    while (tmp_iter != tmp.end())
+      tmp_iter = tmp.begin();
+      while (tmp_iter != tmp.end())
+      {
+        blocks.insert_tail(*tmp_iter);
+        tmp_iter++;
+      }
+
+      delete lblock;
+      delete rblock;
+    }
+    else
     {
-      blocks.insert_tail(*tmp_iter);
-      tmp_iter++;
-    }
+      for (size_t i = 0; i < rsize; ++i) lblock->construct_at(i + lsize, rblock->data[i]);
+      lblock->size = new_size;
 
-    delete lblock;
-    delete rblock;
+      double_list<Block*> tmp;
+      auto tmp_iter = rit;
+      tmp_iter = blocks.erase(tmp_iter);
+      while (tmp_iter != blocks.end())
+      {
+        tmp.insert_tail(*tmp_iter);
+        tmp_iter = blocks.erase(tmp_iter);
+      }
+      *lit = lblock;
+
+      tmp_iter = tmp.begin();
+      while (tmp_iter != tmp.end())
+      {
+        blocks.insert_tail(*tmp_iter);
+        tmp_iter++;
+      }
+
+      delete rblock;
+    }
   }
 
 public:
@@ -1052,11 +1086,20 @@ public:
     else
     {
       Block* blk = *last;
-      Block* newBlock = new Block(blk->size + 1);
-      for (size_t i = 0; i < blk->size; ++i) newBlock->construct_at(i, blk->data[i]);
-      newBlock->construct_at(blk->size, value);
-      delete blk;
-      *last = newBlock;
+      if (blk->size == blk->capacity)
+      {
+        Block* newBlock = new Block(blk->size + 1);
+        for (size_t i = 0; i < blk->size; ++i) newBlock->construct_at(i, blk->data[i]);
+        newBlock->construct_at(blk->size, value);
+        delete blk;
+        *last = newBlock;
+      }
+      else
+      {
+        blk->construct_at(blk->size, value);
+        blk->size++;
+        *last = blk;
+      }
     }
     tot_size++;
   }
@@ -1078,10 +1121,9 @@ public:
     }
     else
     {
-      Block* newBlock = new Block(blk->size - 1);
-      for (size_t i = 0; i < blk->size - 1; ++i) newBlock->construct_at(i, blk->data[i]);
-      delete blk;
-      *last = newBlock;
+      blk->destroy_at(blk->size - 1);
+      blk->size--;
+      *last = blk;
     }
     tot_size--;
   }
